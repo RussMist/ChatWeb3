@@ -2,6 +2,7 @@
 
 ### Installation
 ```sh
+$ npm install
 $ node index
 ```
 Next step: go to http://localhost:3000
