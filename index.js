@@ -1,9 +1,12 @@
 const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
-const crypto = require('crypto');
 const utils = require('./utils');
 
+const help_info = `SERVER: <br/>!transfer :to :private_key :amount - transfer eth from one wallet to another<br/>
+!name - get current value of name<br/>
+!setname :private_key - set name with socket.name.id value<br/>
+!help - get help information`;
 
 http.listen(3000, () => {
   console.log('listening on *:3000');
@@ -15,84 +18,65 @@ app.get('/', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  //uid for connected user
-  socket.user = {};
-  socket.user.id = crypto.randomBytes(8).toString('hex');
-
-  io.emit('sendMessage', `user ${socket.user.id} connected`);
+  io.emit('sendMessage', `user ${socket.id} connected`);
 
   socket
   .on('disconnect', () => {
-    io.emit('sendMessage', `user ${socket.user.id} disconnected`);
+    io.emit('sendMessage', `user ${socket.id} disconnected`);
   })
   .on('sendMessage', (message) => {
-    if (message.match(/!help/)) {
-      socket.emit('sendMessage', `SERVER: <br/>!transfer :to :from :private_key :amount - transfer eth from one wallet to another<br/>
-      !name - get current value of name<br/>
-      !setname :from :private_key - set name with socket.name.id value<br/>
-      !help - get help information`);
-    } 
-    else if (message.match(/!transfer (.+) (.+) (.+) (.+)/)) {
-      let params = /!transfer (.+) (.+) (.+) (.+)/.exec(message);
-
-      let to = params[1];
-      let from = params[2];
-      let private_key = params[3];
-      let amount = params[4];
-      
-      try { 
-        utils.sendTx({
-          to: to,
-          from: from,
-          private_key: private_key,
-          amount: amount
-        }).then((reciept) => {
-          socket.emit('sendMessage', `SERVER: ${socket.user.id}, your transaction is ${reciept.transactionHash}`);
-        }); 
-      }
-      catch (exp) {
-        socket.emit('sendMessage', `SERVER: EXCEPTION - ${exp.message}`);
-      }
-
-      socket.emit('sendMessage', `${socket.user.id}: ${message}`);
-    } 
-    else if (message.match(/!name/)) {
+      io.emit('sendMessage', `${socket.id}: ${message}`); 
+  })
+  .on('help', () => {
+    socket.emit('serverAnswer', help_info);
+  })
+  .on('getName', () => {
       try {
         utils.readSmartContract().then(value => {
-          socket.emit('sendMessage', `SERVER: ${socket.user.id}, name is ${value}`);
+          socket.emit('serverAnswer', `SERVER: ${socket.id}, name is ${value}`);
         });
       } 
       catch (exp) {
-        socket.emit('sendMessage', `SERVER: EXCEPTION - ${exp.message}`);
+        console.log(exp);
+        socket.emit('error', `SERVER: EXCEPTION - ${exp.message}`);
       }
-      socket.emit('sendMessage', `${socket.user.id}: ${message}`);
     }
-    else if (message.match(/!setname (.+) (.+)/)) {
-      let params = /!setname (.+) (.+)/.exec(message);
+  )
+  .on('setName', (private_key) => {
+    try { 
+      utils.sendSmartContract({
+        private_key: private_key,
+        name: socket.id
 
-      let from = params[1];
-      let private_key = params[2];
-      
-      try { 
-        utils.sendSmartContract({
-          from: from,
-          private_key: private_key,
-          name: socket.user.id
-
-        }).then((reciept) => {
-          socket.emit('sendMessage', `SERVER: ${socket.user.id}, value is changed, TxHash is ${reciept.transactionHash}`);
-        }); 
-      }
-      catch (exp) {
-        socket.emit('sendMessage', `SERVER: EXCEPTION - ${exp.message}`);
-      }
-
-      socket.emit('sendMessage', `${socket.user.id}: ${message}`);
-    } 
-    else {
-      io.emit('sendMessage', `${socket.user.id}: ${message}`);
-    }  
+      }).then((reciept) => {
+        socket.emit('serverAnswer', `SERVER: ${socket.id}, value is changed, TxHash is ${reciept.transactionHash}`);
+      }); 
+    }
+    catch (exp) {
+      socket.emit('error', `SERVER: EXCEPTION - ${exp.message}`);
+    }
+  }
+)
+.on('transfer', ({to, private_key, amount}) => {
+    try { 
+      utils.sendTx({
+        to: to,
+        private_key: private_key,
+        amount: amount
+      }).then((reciept) => {
+        socket.emit('serverAnswer', `SERVER: ${socket.id}, your transaction is ${reciept.transactionHash}`);
+      }); 
+    }
+    catch (exp) {
+      socket.emit('error', `SERVER: EXCEPTION - ${exp.message}`);
+    }
+  })
+  .on('signData', (private_key) => {
+    utils.signData_V3(private_key).then((data) => {
+      socket.emit('serverAnswer', `SERVER: ${socket.id}, signed data is 
+      </br>r:${data.r}, 
+      </br>s:${data.s}, 
+      </br>v:${data.v}`);
+    });
   });
 });
-     
-

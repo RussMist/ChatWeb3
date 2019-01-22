@@ -25,17 +25,70 @@
     <script>
         const socket = io();
 
+        const regex = {
+          help: /!help/,
+          getName: /!name/,
+          setName: /!setname (.+)/,
+          transfer: /!transfer (.+) (.+) (.+)/,
+          signData: /!sign (.+)/
+        }
+
         $(function () {
           $('form').submit(function(e){
             e.preventDefault();
-            socket.emit('sendMessage', $('#message').val());
+
+            let message = $('#message').val();
+
+            if(message.length == 0) {
+              return false;
+            }
+
+            socket.emit('sendMessage', message);
+
+            if(message.match(regex.help)) {
+              socket.emit('help');
+            }
+            else if(message.match(regex.getName)) {
+              socket.emit('getName');
+            }
+            else if(message.match(regex.transfer)) {
+              let params = regex.transfer.exec(message);
+
+              let to = params[1];
+              let private_key = params[2];
+              let amount = params[3];
+
+              socket.emit('transfer', {to, private_key, amount});
+            }
+            else if(message.match(regex.setName))
+            {
+              let params = regex.setName.exec(message);
+
+              let private_key = params[1];
+
+              socket.emit('setName', private_key);
+            }
+            else if(message.match(regex.signData)) {              	
+              let params = regex.signData.exec(message);
+              
+              let private_key = params[1];
+              socket.emit('signData', private_key);
+            }
+
             $('#message').val('');
             return false;
           });
         });
 
-        socket.on('sendMessage', function(msg){
+        socket
+        .on('sendMessage', (msg) => {
           $('#messages').append($('<li>').html(msg));
+        })
+        .on('serverAnswer', (msg) => {
+          $('#messages').append($('<li style="color: green">').html(msg));
+        })
+        .on('error', (error) => {
+          $('#messages').append($('<li style="color: red">').html(msg));
         });
 
     </script>
