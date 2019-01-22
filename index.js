@@ -3,9 +3,11 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const utils = require('./utils');
 
-const help_info = `SERVER: <br/>!transfer :to :private_key :amount - transfer eth from one wallet to another<br/>
-!name - get current value of name<br/>
-!setname :private_key - set name with socket.name.id value<br/>
+const help_info = `SERVER:
+!transfer :to :private_key :amount - transfer eth from one wallet to another
+!name - get current value of name
+!setname :private_key - set name with socket.name.id value
+!sign :private_key - sign data with eth_signTypedData_v3
 !help - get help information`;
 
 http.listen(3000, () => {
@@ -74,9 +76,9 @@ io.on('connection', (socket) => {
   .on('signData', (private_key) => {
     utils.signData_V3(private_key).then((data) => {
       socket.emit('serverAnswer', `SERVER: ${socket.id}, signed data is 
-      </br>r:${data.r}, 
-      </br>s:${data.s}, 
-      </br>v:${data.v}`);
+      r:${data.r}, 
+      s:${data.s}, 
+      v:${data.v}`);
     });
   });
 });

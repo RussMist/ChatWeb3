@@ -81,11 +81,11 @@
         });
 
         socket
-        .on('sendMessage', (msg) => {
+        .on('sendMessage', (msg) => { 
           $('#messages').append($('<li>').html(msg));
         })
         .on('serverAnswer', (msg) => {
-          $('#messages').append($('<li style="color: green">').html(msg));
+          $('#messages').append($('<li style="color: green">').html(msg.replace (/\n/g, '<br/>')));
         })
         .on('error', (error) => {
           $('#messages').append($('<li style="color: red">').html(msg));
