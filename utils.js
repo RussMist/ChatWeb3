@@ -1,9 +1,12 @@
 const Web3 = require('web3');
 const EthereumTx = require('ethereumjs-tx');
 const sigUtil = require('eth-sig-util');
+const ethUtil = require('ethereumjs-util');
 
 const web3 = new Web3('https://kovan.infura.io')
 const CONTRACT_HASH = '0x623c871cbc9934ca7dda19ba1539c3ee98ba2557';
+const SERVER_PRIVATE_KEY = 'E6BFA56A591E18329DBE5815B8A3DB5B9C01788DFCA1D6008F877FCAACCCBCEB';
+
 const ABI = [
 	{
 		"constant": false,
@@ -88,8 +91,8 @@ async function readSmartContract() {
     return myContract.methods.name().call();
 }
 
-async function signData_V3(private_key) {
-	const msgParams = {data:{types:{
+async function signData() {
+	const msgParams = {types:{
 		EIP712Domain:[
 		  {name:"name", type:"string"},
 		  {name:"version", type:"string"},
@@ -111,13 +114,23 @@ async function signData_V3(private_key) {
 	  message:{
 		from:{name:"First account", wallet:"0xbCAD601Bf482A2c6986b23B62C9A773487188D0A"},
 		to:{name:"Second account", wallet:"0x74353cEb5E36f10dE357F8791053C67764719346"},
-		contents:"Test message"}
-	  }}
+		contents:"Hello from server"}
+	  }
 	
-	  let privateKey = await Buffer.from(private_key, 'hex')
+	  let privateKey = await Buffer.from(SERVER_PRIVATE_KEY, 'hex')
 
-	  let signature = await sigUtil.signTypedData(privateKey, msgParams);
-	  return parseSignature(signature);
+	  let signature = await sigUtil.signTypedData(privateKey, {data: msgParams});
+
+	  let from = web3.eth.accounts.privateKeyToAccount('0x'+SERVER_PRIVATE_KEY).address;
+
+	  console.log('signature from server', signature);
+	  console.log('msgParams from server', msgParams);
+	  
+	  return {
+		  signature: signature,
+		  msgParams: msgParams,
+		  from: from
+	  }
 }
 
 function parseSignature(signature) {
@@ -132,7 +145,26 @@ function parseSignature(signature) {
 	}
 }
 
+async function checkSignedData({signature, msgParams, from}) {
+	let recovered_address = sigUtil.recoverTypedSignature({ data: msgParams, sig: signature });
+	console.log('signature from client', signature);
+	console.log('msgParams from client', msgParams);
+	let isEqual;
+	if (ethUtil.toChecksumAddress(recovered_address) === ethUtil.toChecksumAddress(from)) {
+		console.log(`recovered address ${recovered_address} and original address ${from} is equal`);
+		isEqual = true;
+	} 
+	else {
+		console.log(`recovered address ${recovered_address} and original address ${from} isn't equal`);
+		isEqual = false;
+	}
+
+	return {isEqual: isEqual, recovered_address: recovered_address, signature: parseSignature(signature)}
+};
+
 module.exports.sendTx = sendTx;
 module.exports.sendSmartContract = sendSmartContract;
 module.exports.readSmartContract = readSmartContract;
-module.exports.signData_V3 = signData_V3;
+module.exports.signData = signData;
+module.exports.parseSignature = parseSignature;
+module.exports.checkSignedData = checkSignedData;

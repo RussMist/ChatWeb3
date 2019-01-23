@@ -2,17 +2,21 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const utils = require('./utils');
+const express = require('express');
 
 const help_info = `SERVER:
 !transfer :to :private_key :amount - transfer eth from one wallet to another
 !name - get current value of name
 !setname :private_key - set name with socket.name.id value
-!sign :private_key - sign data with eth_signTypedData_v3
+!sign - sign data with eth_signTypedData_v3
+!serverSign - sign data from server
 !help - get help information`;
 
 http.listen(3000, () => {
   console.log('listening on *:3000');
 });
+
+app.use('/public', express.static('public'));
 
 //Enter point in our app
 app.get('/', (req, res) => {
@@ -73,12 +77,33 @@ io.on('connection', (socket) => {
       socket.emit('error', `SERVER: EXCEPTION - ${exp.message}`);
     }
   })
-  .on('signData', (private_key) => {
-    utils.signData_V3(private_key).then((data) => {
-      socket.emit('serverAnswer', `SERVER: ${socket.id}, signed data is 
-      r:${data.r}, 
-      s:${data.s}, 
-      v:${data.v}`);
+  .on('serverSignData', () => {
+    utils.signData().then(({signature, msgParams, from}) => {
+      socket.emit('checkServerSignedData', {signature, msgParams, from});
+    });
+  })
+  .on('checkSignedData', ({signature, msgParams, from}) => {
+    utils.checkSignedData({signature, msgParams, from}).then(({isEqual, recovered_address, signature}) => {
+      if(isEqual) {
+        socket.emit('serverAnswer', `SERVER: ${socket.id} sign is correct,
+        signature:
+        r: ${signature.r},
+        s: ${signature.s}, 
+        v: ${signature.v};
+        recovered address ${recovered_address} and original address ${from} is equal`);
+
+        utils.signData().then(({signature, msgParams, from}) => {
+          socket.emit('checkServerSignedData', {signature, msgParams, from});
+        });
+      } 
+      else {
+        socket.emit('serverAnswer', `SERVER: ${socket.id} sign isn't correct,
+        signature:
+        r: ${signature.r},
+        s: ${signature.s},
+        v: ${signature.v};
+        recovered address ${recovered_address} and original address ${from} isn't equal`);
+      }
     });
   });
 });
